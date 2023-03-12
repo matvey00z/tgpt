@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  db:
+    container_name: postgres
+    image: "postgres:latest"
+    restart: unless-stopped
+    healthcheck:
+      test: pg_isready -U postgres -d tgpt
+      interval: 1s
+      timeout: 1s
+      retries: 5
+      start_period: 0s
+    environment:
+      - POSTGRES_DB=tgpt
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - PGUSER=postgres
+
+  bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      - TG_TOKEN=${TG_TOKEN}
+      - GPT_TOKEN=${GPT_TOKEN}
+      - DBHOST=db
+      - DBNAME=tgpt
+      - DBUSER=postgres
+      - DBPASS=${DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
