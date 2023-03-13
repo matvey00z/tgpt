@@ -51,13 +51,6 @@ class DB:
         )
 
         await create_table(
-            "new_users",
-            """
-            username TEXT UNIQUE
-            """,
-        )
-
-        await create_table(
             "requests",
             """
             id SERIAL PRIMARY KEY,
@@ -86,7 +79,6 @@ class DB:
                 assert conversation_id is not None
 
     async def get_user_id(self, tg_id):
-        await self.add_user(tg_id)  # FIXME
         async with self.pool.acquire() as conn:
             return await conn.fetchval("SELECT id FROM users WHERE tg_id = $1", tg_id)
 

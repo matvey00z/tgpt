@@ -25,31 +25,50 @@ logging.basicConfig(
 db = None
 
 
+async def auth(update: Update):
+    tg_user_id = update.effective_user.id
+    user_id = await db.get_user_id(tg_user_id)
+    if user_id is None:
+        logging.warn(f"Message from unknown user: tg_id: {tg_user_id}")
+    return user_id
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!"
-    )
+    try:
+        user_id = await auth(update)
+        if user_id is None:
+            text = f"Your id is {update.effective_user.id}, please talk to the admin to get the access."
+        else:
+            text = "Hi there! Feel free to talk with ChatGPT here."
+    except:
+        logging.exception("Error handling /start")
+        text = "Error making request"
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
 
 
 async def forget(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        tg_user_id = update.effective_user.id
-        user_id = await db.get_user_id(tg_user_id)
+        user_id = await auth(update)
+        if user_id is None:
+            return
         await chatgpt.forget_conversation(user_id)
         response = "All forgotten!"
     except Exception as e:
-        logging.exception("Error handling forget")
+        logging.exception("Error handling /forget")
         response = "Error making request"
+
     await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
 
 async def text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        tg_user_id = update.effective_user.id
-        user_id = await db.get_user_id(tg_user_id)
+        user_id = await auth(update)
+        if user_id is None:
+            return
         response = await chatgpt.request(user_id, update.message.text)
     except Exception as e:
-        logging.exception("Error handling update")
+        logging.exception("Error handling text update")
         response = "Error making request"
     await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
