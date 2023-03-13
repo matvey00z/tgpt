@@ -28,7 +28,7 @@ class DB:
             "users",
             """
             id SERIAL PRIMARY KEY,
-            tg_id INTEGER UNIQUE
+            tg_id BIGINT UNIQUE
             """,
         )
 
@@ -55,7 +55,8 @@ class DB:
             """
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
-            timestamp INTEGER,
+            request_timestamp BIGINT,
+            response_timestamp BIGINT,
             prompt_tokens INTEGER,
             completion_tokens INTEGER
             """,
@@ -138,3 +139,25 @@ class DB:
                 await conn.execute(
                     "DELETE FROM conversations WHERE id = $1", conversation_id
                 )
+
+    async def store_request(self, user_id, timestamp, prompt_tokens):
+        async with self.pool.acquire() as conn:
+            request_id = await conn.fetchval(
+                """
+                INSERT INTO requests (user_id, request_timestamp, prompt_tokens)
+                VALUES ($1, $2, $3)
+                RETURNING id
+                """,
+                user_id, timestamp, prompt_tokens)
+            assert request_id is not None
+            return request_id
+
+    async def store_response(self, request_id, timestamp, prompt_tokens, completion_tokens):
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE requests
+                SET response_timestamp = $1, prompt_tokens = $2, completion_tokens = $3
+                WHERE id = $4
+                """, timestamp, prompt_tokens, completion_tokens, request_id
+            )
