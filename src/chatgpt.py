@@ -4,10 +4,27 @@ import openai
 import tiktoken
 import time
 
+import limiter
+
 MODEL = "gpt-3.5-turbo"
 MAX_TOKENS = 4096
 
+LIMITS = {
+    "requests": 20,
+    "tokens": 40000,
+}
+LIMITS_INTERVAL_SEC = 60
+
 db = None
+
+
+async def get_limiter():
+    if get_limiter.limiter is None:
+        get_limiter.limiter = limiter.Limiter(LIMITS, LIMITS_INTERVAL_SEC)
+    return get_limiter.limiter
+
+
+get_limiter.limiter = None
 
 
 def set_token(token):
@@ -17,6 +34,34 @@ def set_token(token):
 def set_db(new_db):
     global db
     db = new_db
+
+
+def set_limiter(new_limiter):
+    global limiter
+    limiter = new_limiter
+
+
+async def limited(f, volume):
+    try:
+        limiter = await get_limiter()
+        return await limiter.run(f, volume)
+    except (
+        openai.error.APIError,
+        openai.error.Timeout,
+        openai.error.TryAgain,
+        openai.error.RateLimitError,
+        openai.error.ServiceUnavailableError,
+    ):
+        logging.exception("Exception while making request, retry")
+        await asyncio.sleep(1)
+        return limited(f)
+    except:
+        logging.exception("Exception while making request, drop it")
+
+
+async def adjust_limits(volume):
+    limiter = await get_limiter()
+    await limiter.alloc(volume)
 
 
 async def request(user_id, content):
@@ -31,14 +76,28 @@ async def request(user_id, content):
         timestamp = time.time_ns()
         request_id = await db.store_request(user_id, timestamp, prompt_tokens)
         logging.debug(f"Conversation id {conversation_id} messages: {messages}")
-        response = await openai.ChatCompletion.acreate(
-            model=MODEL,
-            messages=messages,
-            temperature=0.3,
+        volume = {
+            "requests": 1,
+            "tokens": prompt_tokens,
+        }
+        response = await limited(
+            openai.ChatCompletion.acreate(
+                model=MODEL,
+                messages=messages,
+                temperature=0.3,
+            ),
+            volume,
         )
         resp_timestamp = time.time_ns()
         resp_prompt_tokens = response["usage"]["prompt_tokens"]
         resp_completion_tokens = response["usage"]["completion_tokens"]
+        await adjust_limits(
+            {
+                "tokens": max(
+                    0, resp_prompt_tokens + resp_completion_tokens - prompt_tokens
+                )
+            }
+        )
         content = response.choices[0].message.content
         request_info = {
             "conversation_id": conversation_id,
@@ -47,11 +106,13 @@ async def request(user_id, content):
             "prompt_tokens": prompt_tokens,
             "resp_prompt_tokens": resp_prompt_tokens,
             "resp_completion_tokens": resp_completion_tokens,
-            "content": content
+            "content": content,
         }
         logging.debug(f"Request: {request_info}")
         await db.store_message(user_id, content, int(UserRole.ASSISTANT))
-        await db.store_response(request_id, resp_timestamp, resp_prompt_tokens, resp_completion_tokens)
+        await db.store_response(
+            request_id, resp_timestamp, resp_prompt_tokens, resp_completion_tokens
+        )
         response_message = content
     except Exception as e:
         logging.exception("Error making request")
@@ -73,7 +134,9 @@ def role2str(i):
 
 
 def drop_ids_callback(messages):
-    max_tokens = int(MAX_TOKENS * 0.9) # Set the max to 90% as our calculation is indicative
+    max_tokens = int(
+        MAX_TOKENS * 0.9
+    )  # Set the max to 90% as our calculation is indicative
     droplist = []
     for message in messages[::-1]:
         tokens = count_message_tokens(message)
@@ -85,9 +148,12 @@ def drop_ids_callback(messages):
     if len(droplist) == len(messages):
         message_len = len(message["content"])
         tokens = count_message_tokens(message)
-        logging.warn(f"Message too long! Message length: {message_len} tokens: {tokens}")
+        logging.warn(
+            f"Message too long! Message length: {message_len} tokens: {tokens}"
+        )
     logging.debug(f"Dropping {len(droplist)} messages from conversation")
     return droplist
+
 
 def get_encoding():
     try:
@@ -95,6 +161,7 @@ def get_encoding():
     except KeyError:
         encoding = tiktoken.get_encoding("cl100k_base")
     return encoding
+
 
 def count_message_tokens(message, encoding=get_encoding()):
     num_tokens = 0
@@ -110,6 +177,7 @@ def count_message_tokens(message, encoding=get_encoding()):
             num_tokens += -1  # role is always required and always 1 token
     num_tokens += 2  # every reply is primed with <im_start>assistant
     return num_tokens
+
 
 def count_conversation_tokens(messages, encoding=get_encoding()):
     num_tokens = 0

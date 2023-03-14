@@ -148,16 +148,25 @@ class DB:
                 VALUES ($1, $2, $3)
                 RETURNING id
                 """,
-                user_id, timestamp, prompt_tokens)
+                user_id,
+                timestamp,
+                prompt_tokens,
+            )
             assert request_id is not None
             return request_id
 
-    async def store_response(self, request_id, timestamp, prompt_tokens, completion_tokens):
+    async def store_response(
+        self, request_id, timestamp, prompt_tokens, completion_tokens
+    ):
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
                 UPDATE requests
                 SET response_timestamp = $1, prompt_tokens = $2, completion_tokens = $3
                 WHERE id = $4
-                """, timestamp, prompt_tokens, completion_tokens, request_id
+                """,
+                timestamp,
+                prompt_tokens,
+                completion_tokens,
+                request_id,
             )
