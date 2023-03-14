@@ -118,7 +118,7 @@ class DB:
             drop_ids = drop_ids_callback(messages)
             if len(drop_ids) > 0:
                 await conn.execute("DELETE FROM messages WHERE id = ANY($1)", drop_ids)
-                messages = [m for m in messages if m.id not in drop_ids]
+                messages = [m for m in messages if m["id"] not in drop_ids]
             return messages
 
     async def switch_conversation(self, user_id: int):
