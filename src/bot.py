@@ -94,6 +94,7 @@ def main():
     builder.token(TG_TOKEN)
     builder.rate_limiter(AIORateLimiter())
     builder.post_init(post_init)
+    builder.concurrent_updates(True)
     application = builder.build()
 
     application.add_handler(CommandHandler("start", start))
