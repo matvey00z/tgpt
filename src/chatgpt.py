@@ -3,6 +3,7 @@ import logging
 import openai
 import tiktoken
 import time
+import asyncio
 
 import limiter
 
