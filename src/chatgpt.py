@@ -55,7 +55,7 @@ async def limited(f, volume):
     ):
         logging.exception("Exception while making request, retry")
         await asyncio.sleep(1)
-        return limited(f, volume)
+        return await limited(f, volume)
     except:
         logging.exception("Exception while making request, drop it")
 
