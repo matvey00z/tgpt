@@ -10,8 +10,8 @@ MODEL = "gpt-3.5-turbo"
 MAX_TOKENS = 4096
 
 LIMITS = {
-    "requests": 20,
-    "tokens": 40000,
+    "requests": 60,
+    "tokens": 60000,
 }
 LIMITS_INTERVAL_SEC = 60
 
