@@ -7,12 +7,12 @@ import asyncio
 
 import limiter
 
-MODEL = "gpt-3.5-turbo"
+MODEL = "gpt-4"
 MAX_TOKENS = 4096
 
 LIMITS = {
-    "requests": 60,
-    "tokens": 60000,
+    "requests": 200,
+    "tokens": 40000,
 }
 LIMITS_INTERVAL_SEC = 60
 
