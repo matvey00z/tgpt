@@ -20,8 +20,10 @@ class DB:
                 await conn.execute(query, values)
 
     async def create_tables(self):
-        async def create_table(name, query):
+        async def create_table(name, query, add_columns = []):
             await self.execute(f"CREATE TABLE IF NOT EXISTS {name} ( {query} )")
+            for column in add_columns:
+                await self.execute(f"ALTER TABLE {name} ADD COLUMN IF NOT EXISTS {column}")
             logging.info(f"Created table {name}")
 
         await create_table(
@@ -60,6 +62,9 @@ class DB:
             prompt_tokens INTEGER,
             completion_tokens INTEGER
             """,
+            [
+                "dalle_3_hd_count INTEGER"
+            ]
         )
 
     async def add_user(self, tg_id):
@@ -140,17 +145,18 @@ class DB:
                     "DELETE FROM conversations WHERE id = $1", conversation_id
                 )
 
-    async def store_request(self, user_id, timestamp, prompt_tokens):
+    async def store_request(self, user_id, timestamp, prompt_tokens=0, dalle_3_hd_count=0):
         async with self.pool.acquire() as conn:
             request_id = await conn.fetchval(
                 """
-                INSERT INTO requests (user_id, request_timestamp, prompt_tokens)
-                VALUES ($1, $2, $3)
+                INSERT INTO requests (user_id, request_timestamp, prompt_tokens, dalle_3_hd_count)
+                VALUES ($1, $2, $3, $4)
                 RETURNING id
                 """,
                 user_id,
                 timestamp,
                 prompt_tokens,
+                dalle_3_hd_count,
             )
             assert request_id is not None
             return request_id
@@ -170,3 +176,18 @@ class DB:
                 completion_tokens,
                 request_id,
             )
+
+    async def store_response_timestamp(
+        self, request_id, timestamp
+    ):
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE requests
+                SET response_timestamp = $1
+                WHERE id = $2
+                """,
+                timestamp,
+                request_id,
+            )
+    

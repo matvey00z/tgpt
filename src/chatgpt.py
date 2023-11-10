@@ -5,15 +5,19 @@ from openai import AsyncOpenAI
 import tiktoken
 import time
 import asyncio
+import base64
+from dataclasses import dataclass
 
 import limiter
 
 MODEL = "gpt-4-1106-preview"
+MODEL_DALLE = "dall-e-3"
 MAX_TOKENS = 120000
 
 LIMITS = {
-    "requests": 200,
-    "tokens": 40000,
+    "requests": 500,
+    "tokens": 90000,
+    "dalle_3_hd": 15,
 }
 LIMITS_INTERVAL_SEC = 60
 
@@ -50,11 +54,9 @@ async def limited(f, volume):
         limiter = await get_limiter()
         return await limiter.run(f, volume)
     except (
-        openai.error.APIError,
-        openai.error.Timeout,
-        openai.error.TryAgain,
-        openai.error.RateLimitError,
-        openai.error.ServiceUnavailableError,
+        openai.APIError,
+        openai.ApiTimeoutError,
+        openai.RateLimitError,
     ):
         logging.exception("Exception while making request, retry")
         await asyncio.sleep(1)
@@ -67,6 +69,42 @@ async def adjust_limits(volume):
     limiter = await get_limiter()
     await limiter.alloc(volume)
 
+@dataclass
+class DalleResponse:
+    revised_prompt: str
+    image: str
+
+async def dalle(user_id, content) -> DalleResponse | None:
+    try:
+        timestamp = time.time_ns()
+        request_id = await db.store_request(user_id, timestamp, dalle_3_hd_count=1)
+        logging.debug(f"User id {user_id} request dalle")
+        volume = {
+            "requests": 1,
+            "dalle_3_hd": 1,
+        }
+        response = await limited(
+            oai_client.images.generate(
+                model=MODEL_DALLE,
+                prompt=content,
+                size="1024x1024",
+                quality="hd",
+                response_format="b64_json",
+                n=1,
+            ),
+            volume
+        )
+        resp_timestamp = time.time_ns()
+        await db.store_response_timestamp(request_id, resp_timestamp)
+        image = response.data[0].b64_json
+        image = base64.b64decode(image)
+        revised_prompt = response.data[0].revised_prompt
+        logging.debug(response.data[0])
+        return DalleResponse(revised_prompt=revised_prompt, image=image)
+    except Exception as e:
+        logging.exception("Error making request")
+    return None
+        
 
 async def request(user_id, content):
     response_message = "Error making request"
@@ -78,7 +116,7 @@ async def request(user_id, content):
         ]
         prompt_tokens = count_conversation_tokens(messages)
         timestamp = time.time_ns()
-        request_id = await db.store_request(user_id, timestamp, prompt_tokens)
+        request_id = await db.store_request(user_id, timestamp, prompt_tokens=prompt_tokens)
         logging.debug(f"Conversation id {conversation_id} messages: {messages}")
         volume = {
             "requests": 1,

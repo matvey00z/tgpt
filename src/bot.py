@@ -60,6 +60,20 @@ async def forget(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
+async def dalle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        user_id = await auth(update)
+        if user_id is None:
+            return
+        text = update.message.text.replace("/dalle", "")
+        resp = await chatgpt.dalle(user_id, text)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=resp.revised_prompt)
+        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=resp.image)
+    except Exception as e:
+        logging.exception("Error handling /dalle")
+        response = "Error making request"
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
 
 async def text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -99,6 +113,7 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("forget", forget))
+    application.add_handler(CommandHandler("dalle", dalle))
 
     application.add_handler(
         MessageHandler(filters.TEXT & (~filters.COMMAND), text_message)
