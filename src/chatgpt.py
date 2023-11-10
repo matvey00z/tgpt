@@ -54,8 +54,7 @@ async def limited(f, volume):
         limiter = await get_limiter()
         return await limiter.run(f, volume)
     except (
-        openai.APIError,
-        openai.ApiTimeoutError,
+        openai.APITimeoutError,
         openai.RateLimitError,
     ):
         logging.exception("Exception while making request, retry")
@@ -63,6 +62,7 @@ async def limited(f, volume):
         return await limited(f, volume)
     except:
         logging.exception("Exception while making request, drop it")
+        raise
 
 
 async def adjust_limits(volume):
@@ -72,7 +72,7 @@ async def adjust_limits(volume):
 @dataclass
 class DalleResponse:
     revised_prompt: str
-    image: str
+    image: str | None = None
 
 async def dalle(user_id, content) -> DalleResponse | None:
     try:
@@ -101,8 +101,11 @@ async def dalle(user_id, content) -> DalleResponse | None:
         revised_prompt = response.data[0].revised_prompt
         logging.debug(response.data[0])
         return DalleResponse(revised_prompt=revised_prompt, image=image)
+    except openai.BadRequestError as e:
+        logging.exception("Error making request: badrequest")
+        return DalleResponse(revised_prompt=f"Bad request!\nCode: {e.code}")
     except Exception as e:
-        logging.exception("Error making request")
+        logging.exception(f"Error making request: {e}")
     return None
         
 

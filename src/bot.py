@@ -68,7 +68,8 @@ async def dalle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text.replace("/dalle", "")
         resp = await chatgpt.dalle(user_id, text)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=resp.revised_prompt)
-        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=resp.image)
+        if resp.image:
+            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=resp.image)
     except Exception as e:
         logging.exception("Error handling /dalle")
         response = "Error making request"
