@@ -8,7 +8,7 @@ import asyncio
 import limiter
 
 MODEL = "gpt-4-1106-preview"
-MAX_TOKENS = 4096
+MAX_TOKENS = 120000
 
 LIMITS = {
     "requests": 200,
