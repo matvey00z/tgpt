@@ -1,6 +1,7 @@
 from enum import IntEnum
 import logging
 import openai
+from openai import AsyncOpenAI
 import tiktoken
 import time
 import asyncio
@@ -28,8 +29,10 @@ async def get_limiter():
 get_limiter.limiter = None
 
 
+oai_client = None
 def set_token(token):
-    openai.api_key = token
+    global oai_client
+    oai_client = AsyncOpenAI(api_key = token)
 
 
 def set_db(new_db):
@@ -82,7 +85,7 @@ async def request(user_id, content):
             "tokens": prompt_tokens,
         }
         response = await limited(
-            openai.ChatCompletion.acreate(
+            oai_client.chat.completions.create(
                 model=MODEL,
                 messages=messages,
                 temperature=0.3,
@@ -90,8 +93,8 @@ async def request(user_id, content):
             volume,
         )
         resp_timestamp = time.time_ns()
-        resp_prompt_tokens = response["usage"]["prompt_tokens"]
-        resp_completion_tokens = response["usage"]["completion_tokens"]
+        resp_prompt_tokens = response.usage.prompt_tokens
+        resp_completion_tokens = response.usage.completion_tokens
         await adjust_limits(
             {
                 "tokens": max(
