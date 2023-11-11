@@ -165,7 +165,19 @@ async def request(user_id, content):
 
 
 async def forget_conversation(user_id):
-    await db.switch_conversation(user_id)
+    await db.forget_conversation(user_id)
+
+async def quit_conversation(user_id):
+    await db.quit_conversation(user_id)
+
+async def get_conversations_list(user_id):
+    return await db.get_conversations_list(user_id)
+
+async def select_conversation(user_id, conversation_id):
+    title = await db.get_conversation_title(user_id, conversation_id)
+    if title is not None:
+        await db.set_current_conversation(user_id, conversation_id)
+    return title
 
 
 class UserRole(IntEnum):

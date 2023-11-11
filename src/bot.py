@@ -3,13 +3,18 @@
 import logging
 import os
 import asyncio
-from telegram import Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update
+)
 from telegram.ext import (
     filters,
     Application,
     ApplicationBuilder,
     ContextTypes,
     CommandHandler,
+    CallbackQueryHandler,
     MessageHandler,
     AIORateLimiter,
 )
@@ -19,7 +24,7 @@ import db_handler
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.DEBUG,
+    level=logging.INFO,
 )
 
 db = None
@@ -59,6 +64,68 @@ async def forget(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = "Error making request"
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+
+async def new(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        user_id = await auth(update)
+        if user_id is None:
+            return
+        await chatgpt.quit_conversation(user_id)
+        response = "New conversation started"
+    except Exception as e:
+        logging.exception("Error handling /new")
+        response = "Error making request"
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+async def list_conversations(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def get_label(conversation):
+        current = "* " if conversation.get("current", False) else "  "
+        title = conversation["title"]
+        return f"{current}{title}"
+
+    try:
+        user_id = await auth(update)
+        if user_id is None:
+            return
+        conversations = await chatgpt.get_conversations_list(user_id)
+
+        keyboard = [
+            [InlineKeyboardButton(get_label(c), callback_data=f"choose:{c['id']}")]
+            for c in conversations
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Choose a conversation:", reply_markup=reply_markup)
+    except Exception as e:
+        logging.exception("Error handling /choose")
+        response = "Error making request"
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+async def choose_conversation(chat_id, user_id, query):
+    conversation_id = int(query[1])
+    title = await chatgpt.select_conversation(user_id, conversation_id)
+    if title:
+        response = f"You are in this conversation now: {title}"
+    else:
+        response = "Failed to select the conversation"
+    return response
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = await auth(update)
+    if user_id is None:
+        return
+
+    query = update.callback_query
+    await query.answer()
+    q = query.data.split(':')
+    action = q[0]
+    response = None
+    if action == "choose":
+        response = await choose_conversation(update.effective_chat.id, user_id, q)
+    if response:
+        await query.edit_message_text(text=response)
+
 
 async def dalle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -114,7 +181,10 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("forget", forget))
+    application.add_handler(CommandHandler("new", new))
+    application.add_handler(CommandHandler("choose", list_conversations))
     application.add_handler(CommandHandler("dalle", dalle))
+    application.add_handler(CallbackQueryHandler(button))
 
     application.add_handler(
         MessageHandler(filters.TEXT & (~filters.COMMAND), text_message)
