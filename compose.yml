@@ -18,7 +18,9 @@ services:
       - PGUSER=postgres
 
   bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       - TG_TOKEN=${TG_TOKEN}

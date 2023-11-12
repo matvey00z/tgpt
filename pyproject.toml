@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "tgpt"
+version = "0.1.0"
+description = ""
+authors = ["Matvey Zakharchenko <matvey.ff@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+aiohttp = "^3.8.4"
+asyncpg = "^0.27.0"
+openai = "^1.2.3"
+python-telegram-bot = "^20.6"
+requests = "^2.28.2"
+tiktoken = "^0.3.1"
+aiolimiter = "^1.1.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
