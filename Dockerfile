@@ -8,7 +8,8 @@ RUN pip install poetry
 # Copy only pyproject.toml and poetry.lock to cache dependencies
 COPY pyproject.toml poetry.lock* ./
 
-RUN poetry install --no-interaction --no-ansi --no-root
+RUN poetry config virtualenvs.create false && \
+        poetry install --no-interaction --no-ansi --no-root
 
 # Copy the rest of the application
 COPY src/* ./
