@@ -20,7 +20,11 @@ DB_PASSWORD=<some-random-password>
 
 While talking to the bot, just send text messages and get the replies from ChatGPT. Other than that, the following commands are supported:
 
-1. `/forget`: forget previous messages
+1. `/new`: Start a new conversation.
+1. `/choose`: Select a previous conversation.
+1. `/forget`: Forget the current conversation.
+1. `/dalle`: Generate an image using DALL-E.
+1. `/model`: Choose a model.
 
 ## References
 
