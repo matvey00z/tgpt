@@ -10,13 +10,13 @@ from dataclasses import dataclass
 
 import limiter
 
-MODEL = "gpt-4-1106-preview"
+MODEL = "gpt-4o"
 MODEL_DALLE = "dall-e-3"
 MAX_TOKENS = 120000
 
 LIMITS = {
-    "requests": 500,
-    "tokens": 90000,
+    "requests": 10000,
+    "tokens": 2000000,
     "dalle_3_hd": 15,
 }
 LIMITS_INTERVAL_SEC = 60
@@ -109,10 +109,22 @@ async def dalle(user_id, content) -> DalleResponse | None:
     return None
         
 
+async def get_models():
+    response = await oai_client.models.list()
+    logging.debug(response)
+    models = [m for m in response.data]
+    models = [m for m in models if m.owned_by != "openai-internal"]
+    models = sorted(models, key=lambda m: m.created)
+    return [{"model": m.id, "created": m.created} for m in models]
+
+
 async def request(user_id, content):
     response_message = "Error making request"
     try:
         conversation_id = await db.store_message(user_id, content, UserRole.USER.value)
+        model = await db.get_user_model(user_id)
+        if model is None:
+            model = MODEL
         messages = await db.get_messages(conversation_id, drop_ids_callback)
         messages = [
             {"role": role2str(m["role"]), "content": m["content"]} for m in messages
@@ -127,9 +139,8 @@ async def request(user_id, content):
         }
         response = await limited(
             oai_client.chat.completions.create(
-                model=MODEL,
+                model=model,
                 messages=messages,
-                temperature=0.3,
             ),
             volume,
         )
@@ -212,9 +223,9 @@ def drop_ids_callback(messages):
     return droplist
 
 
-def get_encoding():
+def get_encoding(model = MODEL):
     try:
-        encoding = tiktoken.encoding_for_model(MODEL)
+        encoding = tiktoken.encoding_for_model(model)
     except KeyError:
         encoding = tiktoken.get_encoding("cl100k_base")
     return encoding

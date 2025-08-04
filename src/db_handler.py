@@ -78,6 +78,14 @@ class DB:
             ]
         )
 
+        await create_table(
+            "models",
+            """
+            user_id INTEGER PRIMARY KEY,
+            model   VARCHAR(255)
+            """,
+        )
+
     async def add_user(self, tg_id):
         async with self.pool.acquire() as conn:
             user_id = await conn.fetchval(
@@ -92,6 +100,27 @@ class DB:
     async def get_user_id(self, tg_id):
         async with self.pool.acquire() as conn:
             return await conn.fetchval("SELECT id FROM users WHERE tg_id = $1", tg_id)
+
+    async def set_user_model(self, user_id, model: str):
+        async with self.pool.acquire() as conn:
+            model = await conn.fetchval(
+                    """
+                    INSERT INTO models (user_id, model)
+                    VALUES($1, $2)
+                    ON CONFLICT (user_id) DO
+                        UPDATE SET model = EXCLUDED.model
+                    RETURNING model
+                    """,
+                    user_id, model,
+                )
+            return model
+
+    async def get_user_model(self, user_id):
+        async with self.pool.acquire() as conn:
+            model = await conn.fetchval(
+                "SELECT model FROM models WHERE user_id = $1", user_id
+            )
+            return model
 
     async def get_current_conversation(self, user_id):
         async with self.pool.acquire() as conn:

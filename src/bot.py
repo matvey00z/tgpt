@@ -3,6 +3,7 @@
 import logging
 import os
 import asyncio
+import datetime
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -79,6 +80,44 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
+
+async def list_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def get_label(model):
+        created = datetime.datetime.fromtimestamp(model["created"])
+        created = created.strftime("%d %b %Y")
+        return f"{created} {model['model']}"
+
+    try:
+        user_id = await auth(update)
+        if user_id is None:
+            return
+        current_model = await db.get_user_model(user_id)
+        if current_model is None:
+            current_model = chatgpt.MODEL
+        models = await chatgpt.get_models()
+        keyboard = [
+            [InlineKeyboardButton(get_label(m), callback_data = f"model:{m['model']}")]
+            for m in models
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(f"Choose a model (current: {current_model}):", reply_markup=reply_markup)
+    except Exception as e:
+        logging.exception("Error hanlding /model")
+        response = "Error making request"
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
+
+async def choose_model(chat_id, user_id, query):
+    models = await chatgpt.get_models()
+    models = [m["model"] for m in models]
+    model_id = query[1]
+    if model_id in models:
+        model_id = await db.set_user_model(user_id, model_id)
+        response = f"Use this model now: {model_id}"
+    else:
+        response = "Failed to select the model"
+    return response
+
+
 async def list_conversations(update: Update, context: ContextTypes.DEFAULT_TYPE):
     def get_label(conversation):
         current = "* " if conversation.get("current", False) else "  "
@@ -123,6 +162,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = None
     if action == "choose":
         response = await choose_conversation(update.effective_chat.id, user_id, q)
+    elif action == "model":
+        response = await choose_model(update.effective_chat.id, user_id, q)
     if response:
         await query.edit_message_text(text=response)
 
@@ -183,6 +224,7 @@ def main():
     application.add_handler(CommandHandler("forget", forget))
     application.add_handler(CommandHandler("new", new))
     application.add_handler(CommandHandler("choose", list_conversations))
+    application.add_handler(CommandHandler("model", list_models))
     application.add_handler(CommandHandler("dalle", dalle))
     application.add_handler(CallbackQueryHandler(button))
 
