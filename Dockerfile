@@ -1,4 +1,4 @@
-FROM python:3.11.2-slim-bullseye
+FROM python:3.13.5-slim-bullseye
 
 WORKDIR /app
 
@@ -8,9 +8,7 @@ RUN pip install poetry
 # Copy only pyproject.toml and poetry.lock to cache dependencies
 COPY pyproject.toml poetry.lock* ./
 
-# Install dependencies without dev dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi
+RUN poetry install --no-interaction --no-ansi --no-root
 
 # Copy the rest of the application
 COPY src/* ./
